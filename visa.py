@@ -38,6 +38,8 @@ HUB_ADDRESS = config['CHROMEDRIVER']['HUB_ADDRESS']
 
 REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
 
+SLACK_WEBHOOK = config['SLACK']['SLACK_WEBHOOK']
+
 
 # def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
 def MY_CONDITION(month, day): return True # No custom condition wanted for the new scheduled date
@@ -79,6 +81,11 @@ def send_notification(msg):
             "message": msg
         }
         requests.post(url, data)
+
+    if SLACK_WEBHOOK:
+        headers = {'Content-type': 'application/json'}
+        payload = {'text': msg}
+        requests.post(SLACK_WEBHOOK, data=json.dumps(payload), headers=headers)
 
 
 def get_driver():
@@ -199,8 +206,10 @@ def is_logged_in():
 
 def print_dates(dates):
     print("Available dates:")
+    send_notification("Available dates:")
     for d in dates:
         print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
+        send_notification("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
     print()
 
 
@@ -215,9 +224,11 @@ def get_available_date(dates):
         new_date = datetime.strptime(date, "%Y-%m-%d")
         result = my_date > new_date
         print(f'Is {my_date} > {new_date}:\t{result}')
+        send_notification(f'Is {my_date} > {new_date}:\t{result}')
         return result
 
     print("Checking for an earlier date:")
+    send_notification("Checking for an earlier date:")
     for d in dates:
         date = d.get('date')
         if is_earlier(date) and date != last_seen:
@@ -244,6 +255,7 @@ if __name__ == "__main__":
             print("------------------")
             print(datetime.today())
             print(f"Retry count: {retry_count}")
+            send_notification(f"Checking for available dates, retry count: {retry_count}")
             print()
 
             dates = get_date()[:5]
@@ -255,6 +267,7 @@ if __name__ == "__main__":
             date = get_available_date(dates)
             print()
             print(f"New date: {date}")
+            send_notification(f"New date: {date}")
             if date:
                 reschedule(date)
                 push_notification(dates)
