@@ -9,7 +9,7 @@ from datetime import datetime
 
 import requests
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as Wait
 from selenium.webdriver.common.by import By
@@ -43,7 +43,7 @@ REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
 def MY_CONDITION(month, day): return True # No custom condition wanted for the new scheduled date
 
 STEP_TIME = 0.5  # time between steps (interactions with forms): 0.5 seconds
-RETRY_TIME = 60*10  # wait time between retries/checks for available dates: 10 minutes
+RETRY_TIME = 60*1  # wait time between retries/checks for available dates: 10 minutes
 EXCEPTION_TIME = 60*30  # wait time when an exception occurs: 30 minutes
 COOLDOWN_TIME = 60*60  # wait time when temporary banned (empty list): 60 minutes
 
@@ -83,7 +83,7 @@ def send_notification(msg):
 
 def get_driver():
     if LOCAL_USE:
-        dr = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+        dr = webdriver.Chrome()
     else:
         dr = webdriver.Remote(command_executor=HUB_ADDRESS, options=webdriver.ChromeOptions())
     return dr
@@ -141,15 +141,11 @@ def do_login_action():
 
 
 def get_date():
-    driver.get(DATE_URL)
-    if not is_logged_in():
-        login()
-        return get_date()
-    else:
-        content = driver.find_element(By.TAG_NAME, 'pre').text
-        date = json.loads(content)
-        return date
-
+    driver.get(APPOINTMENT_URL)
+    session = driver.get_cookie("_yatri_session")["value"]
+    script = "var req = new XMLHttpRequest();req.open('GET', '" + str(DATE_URL) + "', false);req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');req.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); req.setRequestHeader('Cookie', '_yatri_session=" + session + "'); req.send(null);return req.responseText;"
+    NEW_GET = driver.execute_script(script)
+    return json.loads(NEW_GET)
 
 def get_time(date):
     time_url = TIME_URL % date
