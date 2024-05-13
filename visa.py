@@ -45,13 +45,20 @@ SLACK_WEBHOOK = config['SLACK']['SLACK_WEBHOOK']
 def MY_CONDITION(month, day): return True # No custom condition wanted for the new scheduled date
 
 STEP_TIME = 0.5  # time between steps (interactions with forms): 0.5 seconds
-RETRY_TIME = 60*1  # wait time between retries/checks for available dates: 10 minutes
+RETRY_TIME = 60*3  # wait time between retries/checks for available dates: 10 minutes
 EXCEPTION_TIME = 60*30  # wait time when an exception occurs: 30 minutes
 COOLDOWN_TIME = 60*60  # wait time when temporary banned (empty list): 60 minutes
 
 DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
 TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
 APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment"
+JS_SCRIPT = ("var req = new XMLHttpRequest();"
+                f"req.open('GET', '%s', false);"
+                "req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');"
+                "req.setRequestHeader('X-Requested-With', 'XMLHttpRequest');"
+                f"req.setRequestHeader('Cookie', '_yatri_session=%s');"
+                "req.send(null);"
+                "return req.responseText;")
 EXIT = False
 
 
@@ -156,9 +163,11 @@ def get_date():
 
 def get_time(date):
     time_url = TIME_URL % date
-    driver.get(time_url)
-    content = driver.find_element(By.TAG_NAME, 'pre').text
+    session = driver.get_cookie("_yatri_session")["value"]
+    script = JS_SCRIPT % (str(time_url), session)
+    content = driver.execute_script(script)
     data = json.loads(content)
+    print(f"Got time successfully! {data}")
     time = data.get("available_times")[-1]
     print(f"Got time successfully! {date} {time}")
     return time
@@ -167,33 +176,44 @@ def get_time(date):
 def reschedule(date):
     global EXIT
     print(f"Starting Reschedule ({date})")
+    send_notification(f"Starting Reschedule ({date})")
 
-    time = get_time(date)
-    driver.get(APPOINTMENT_URL)
+    print("\tinput date")
+    date_input = driver.find_element(By.ID, 'appointments_consulate_appointment_date')
+    driver.execute_script("arguments[0].removeAttribute('readonly')", date_input)
+    date_input.send_keys(date)
+    time.sleep(random.randint(1, 2))
+    print("\tselect day")
+    current_day = driver.find_element(By.CLASS_NAME, 'ui-datepicker-current-day')
+    current_day.find_element(By.XPATH, './a').click()
+    time.sleep(random.randint(1, 2))
 
-    data = {
-        # "utf8": driver.find_element(by=By.NAME, value='utf8').get_attribute('value'),
-        "authenticity_token": driver.find_element(by=By.NAME, value='authenticity_token').get_attribute('value'),
-        "confirmed_limit_message": driver.find_element(by=By.NAME, value='confirmed_limit_message').get_attribute('value'),
-        "use_consulate_appointment_capacity": driver.find_element(by=By.NAME, value='use_consulate_appointment_capacity').get_attribute('value'),
-        "appointments[consulate_appointment][facility_id]": FACILITY_ID,
-        "appointments[consulate_appointment][date]": date,
-        "appointments[consulate_appointment][time]": time,
-    }
+    print("\tselect time")
+    select = driver.find_element(By.ID, 'appointments_consulate_appointment_time')
+    # select first available option
+    select.find_element(By.XPATH, './option[2]').click()
+    
+    time.sleep(random.randint(1, 2))
 
-    headers = {
-        "User-Agent": driver.execute_script("return navigator.userAgent;"),
-        "Referer": APPOINTMENT_URL,
-        "Cookie": "_yatri_session=" + driver.get_cookie("_yatri_session")["value"]
-    }
+    print("\taccept appointment")
+    accept = driver.find_element(By.ID, 'appointments_submit')
+    accept.click()
+    time.sleep(random.randint(1, 2))
 
-    r = requests.post(APPOINTMENT_URL, headers=headers, data=data)
-    if(r.text.find('Successfully Scheduled') != -1):
-        msg = f"Rescheduled Successfully! {date} {time}"
+    # Confirmar
+    # Get a tag with text "Confirmar"
+    confirm_button = driver.find_element(By.XPATH, '//*[contains(text(), "Confirmar")]')
+    confirm_button.click()
+    time.sleep(3)
+
+    # Check if the following text is present "La programación de su cita se ha realizado correctamente"
+
+    if(driver.page_source.find('La programación de su cita se ha realizado correctamente') != -1):
+        msg = f"Rescheduled Successfully! {date}"
         send_notification(msg)
         EXIT = True
     else:
-        msg = f"Reschedule Failed. {date} {time}"
+        msg = f"Reschedule Failed. {date}"
         send_notification(msg)
 
 
@@ -206,10 +226,8 @@ def is_logged_in():
 
 def print_dates(dates):
     print("Available dates:")
-    send_notification("Available dates:")
     for d in dates:
         print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
-        send_notification("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
     print()
 
 
@@ -224,11 +242,9 @@ def get_available_date(dates):
         new_date = datetime.strptime(date, "%Y-%m-%d")
         result = my_date > new_date
         print(f'Is {my_date} > {new_date}:\t{result}')
-        send_notification(f'Is {my_date} > {new_date}:\t{result}')
         return result
 
     print("Checking for an earlier date:")
-    send_notification("Checking for an earlier date:")
     for d in dates:
         date = d.get('date')
         if is_earlier(date) and date != last_seen:
@@ -255,7 +271,6 @@ if __name__ == "__main__":
             print("------------------")
             print(datetime.today())
             print(f"Retry count: {retry_count}")
-            send_notification(f"Checking for available dates, retry count: {retry_count}")
             print()
 
             dates = get_date()[:5]
@@ -267,7 +282,6 @@ if __name__ == "__main__":
             date = get_available_date(dates)
             print()
             print(f"New date: {date}")
-            send_notification(f"New date: {date}")
             if date:
                 reschedule(date)
                 push_notification(dates)
