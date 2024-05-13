@@ -25,6 +25,7 @@ config.read('config.ini')
 USERNAME = config['USVISA']['USERNAME']
 PASSWORD = config['USVISA']['PASSWORD']
 SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']
+MY_SCHEDULE_DATE_START = config['USVISA']['MY_SCHEDULE_DATE_START']
 MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']
 COUNTRY_CODE = config['USVISA']['COUNTRY_CODE'] 
 FACILITY_ID = config['USVISA']['FACILITY_ID']
@@ -231,27 +232,21 @@ def print_dates(dates):
     print()
 
 
-last_seen = None
-
-
 def get_available_date(dates):
-    global last_seen
 
-    def is_earlier(date):
-        my_date = datetime.strptime(MY_SCHEDULE_DATE, "%Y-%m-%d")
+    def is_in_period(date, PSD, PED):
         new_date = datetime.strptime(date, "%Y-%m-%d")
-        result = my_date > new_date
-        print(f'Is {my_date} > {new_date}:\t{result}')
+        result = ( PED > new_date and new_date > PSD )
         return result
 
     print("Checking for an earlier date:")
+    PED = datetime.strptime(MY_SCHEDULE_DATE, "%Y-%m-%d")
+    PSD = datetime.strptime(MY_SCHEDULE_DATE_START, "%Y-%m-%d")
     for d in dates:
         date = d.get('date')
-        if is_earlier(date) and date != last_seen:
-            _, month, day = date.split('-')
-            if(MY_CONDITION(month, day)):
-                last_seen = date
-                return date
+        if is_in_period(date, PSD, PED):
+            return date
+    print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")
 
 
 def push_notification(dates):
