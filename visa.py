@@ -258,46 +258,46 @@ def push_notification(dates):
 
 
 if __name__ == "__main__":
-    login()
-    retry_count = 0
-    while 1:
-        if retry_count > 6:
-            break
+    while not EXIT:
         try:
-            print("------------------")
-            print(datetime.today())
-            print(f"Retry count: {retry_count}")
-            print()
+            login()
+            retry_count = 0
+            while retry_count <= 6:
+                try:
+                    print("------------------")
+                    print(datetime.today())
+                    print(f"Retry count: {retry_count}")
+                    print()
 
-            dates = get_date()[:5]
-            # if not dates:
-            #   msg = "List is empty"
-            #   send_notification(msg)
-            #   EXIT = True
-            print_dates(dates)
-            date = get_available_date(dates)
-            print()
-            print(f"New date: {date}")
-            if date:
-                reschedule(date)
-                push_notification(dates)
+                    dates = get_date()[:5]
+                    print_dates(dates)
+                    date = get_available_date(dates)
+                    print()
+                    print(f"New date: {date}")
+                    if date:
+                        reschedule(date)
+                        push_notification(dates)
 
-            if(EXIT):
-                print("------------------exit")
-                break
+                    if(EXIT):
+                        print("------------------exit")
+                        break
 
-            if not dates:
-              msg = "List is empty"
-              print(msg)
-              #EXIT = True
-              time.sleep(COOLDOWN_TIME)
-            else:
-              time.sleep(RETRY_TIME)
+                    if not dates:
+                        msg = "List is empty"
+                        print(msg)
+                        time.sleep(COOLDOWN_TIME)
+                    else:
+                        time.sleep(RETRY_TIME)
 
-        except:
-            retry_count += 1
-            send_notification("Exception occurred!")
+                except:
+                    retry_count += 1
+                    send_notification("Exception occurred!")
+                    time.sleep(RETRY_TIME)
+            if not EXIT:
+                send_notification("HELP! Crashed.")
+        except Exception as e:
+            print(f"Login failed with exception: {e}")
+            send_notification("Exception occurred during login!")
             time.sleep(EXCEPTION_TIME)
-
-    if(not EXIT):
-        send_notification("HELP! Crashed.")
+            driver.quit()
+            driver = get_driver()  # Reinitialize the driver
