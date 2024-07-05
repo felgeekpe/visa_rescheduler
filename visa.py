@@ -53,6 +53,7 @@ COOLDOWN_TIME = 60*10  # wait time when temporary banned (empty list): 60 minute
 DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
 TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
 APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment?confirmed_limit_message=1"
+# APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment?applicants%5B%5D=59218750&applicants%5B%5D=59218801&applicants%5B%5D=59218832&applicants%5B%5D=64196968&confirmed_limit_message=1&commit=Continuar"
 JS_SCRIPT = ("var req = new XMLHttpRequest();"
                 f"req.open('GET', '%s', false);"
                 "req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');"
@@ -295,6 +296,7 @@ if __name__ == "__main__":
 
         except:
             retry_count += 1
+            send_notification("Exception occurred!")
             time.sleep(EXCEPTION_TIME)
 
     if(not EXIT):
