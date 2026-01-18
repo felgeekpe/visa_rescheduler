@@ -27,4 +27,16 @@ SENDGRID_API_KEY =
 
 [SLACK]
 ; Get slack notifications via Slack (optional)
-SLACK_WEBHOOK = 
+SLACK_WEBHOOK =
+
+[TELEGRAM]
+; Get Telegram notifications (recommended - fast & free)
+; 1. Create a bot via @BotFather on Telegram
+; 2. Get your chat ID by messaging @userinfobot
+TELEGRAM_BOT_TOKEN =
+TELEGRAM_CHAT_ID =
+
+[DISCORD]
+; Get Discord notifications via webhook (optional)
+; Create a webhook in your Discord channel settings
+DISCORD_WEBHOOK =

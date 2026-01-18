@@ -38,6 +38,13 @@ Configuration:
         LOCAL_USE: True for local Chrome, False for remote WebDriver
         HUB_ADDRESS: Remote WebDriver URL (required if LOCAL_USE is False)
 
+    [TELEGRAM] (recommended)
+        TELEGRAM_BOT_TOKEN: Bot token from @BotFather
+        TELEGRAM_CHAT_ID: Your chat or group ID
+
+    [DISCORD] (optional)
+        DISCORD_WEBHOOK: Discord channel webhook URL
+
     [PUSHOVER] (optional)
         PUSH_TOKEN: Pushover API token
         PUSH_USER: Pushover user key
@@ -104,6 +111,9 @@ SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']  # Email notifications
 PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']              # Pushover API token
 PUSH_USER = config['PUSHOVER']['PUSH_USER']                # Pushover user key
 SLACK_WEBHOOK = config['SLACK']['SLACK_WEBHOOK']           # Slack webhook URL
+TELEGRAM_BOT_TOKEN = config['TELEGRAM']['TELEGRAM_BOT_TOKEN']  # Telegram bot token from @BotFather
+TELEGRAM_CHAT_ID = config['TELEGRAM']['TELEGRAM_CHAT_ID']      # Telegram chat/group ID for notifications
+DISCORD_WEBHOOK = config['DISCORD']['DISCORD_WEBHOOK']         # Discord webhook URL for channel notifications
 
 # -----------------------------------------------------------------------------
 # WebDriver Configuration (from [CHROMEDRIVER] section)
@@ -177,11 +187,35 @@ def send_notification(msg: str) -> None:
             for email notifications.
 
     Configured channels:
+        - Telegram: Sends message via Telegram bot (recommended - fast & reliable)
+        - Discord: Posts message to Discord channel webhook (recommended)
         - SendGrid: Sends email to USERNAME (the account email)
         - Pushover: Sends push notification to mobile device
         - Slack: Posts message to configured webhook channel
     """
     print(f"Sending notification: {msg}")
+
+    # Telegram - fast, reliable, and free
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": msg,
+            "parse_mode": "HTML"
+        }
+        try:
+            requests.post(url, data=data)
+        except Exception as e:
+            print(f"Telegram notification failed: {e}")
+
+    # Discord - popular for gaming/tech communities
+    if DISCORD_WEBHOOK:
+        headers = {'Content-type': 'application/json'}
+        payload = {'content': msg}
+        try:
+            requests.post(DISCORD_WEBHOOK, data=json.dumps(payload), headers=headers)
+        except Exception as e:
+            print(f"Discord notification failed: {e}")
 
     if SENDGRID_API_KEY:
         message = Mail(
