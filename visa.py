@@ -166,6 +166,21 @@ EXIT = False
 
 
 def send_notification(msg: str) -> None:
+    """Send notification message through all configured channels.
+
+    Attempts to send the notification via each configured service. If a service
+    is not configured (API key or webhook is empty/missing), it is skipped.
+    Errors in one channel do not prevent attempts to other channels.
+
+    Args:
+        msg: The notification message to send. Used as both subject and body
+            for email notifications.
+
+    Configured channels:
+        - SendGrid: Sends email to USERNAME (the account email)
+        - Pushover: Sends push notification to mobile device
+        - Slack: Posts message to configured webhook channel
+    """
     print(f"Sending notification: {msg}")
 
     if SENDGRID_API_KEY:
@@ -199,6 +214,20 @@ def send_notification(msg: str) -> None:
 
 
 def get_driver() -> Union[webdriver.Chrome, webdriver.Remote]:
+    """Initialize and return a Selenium WebDriver instance.
+
+    Creates either a local Chrome browser instance or connects to a remote
+    WebDriver hub based on the LOCAL_USE configuration setting.
+
+    Returns:
+        WebDriver instance (Chrome for local, Remote for hub connection).
+
+    Configuration:
+        LOCAL_USE=True: Creates a local Chrome browser using webdriver-manager
+            for automatic ChromeDriver version handling.
+        LOCAL_USE=False: Connects to a remote Selenium hub at HUB_ADDRESS,
+            useful for running in Docker or on a remote server.
+    """
     if LOCAL_USE:
         dr = webdriver.Chrome()
     else:
