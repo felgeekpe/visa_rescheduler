@@ -1,3 +1,13 @@
 config.ini
 aca/*
 .DS_STORE
+
+.claude
+
+.vscode
+
+__pycache__
+
+# Virtual environments
+.venv
+venv

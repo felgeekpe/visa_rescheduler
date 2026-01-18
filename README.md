@@ -9,7 +9,7 @@ US VISA (ais.usvisa-info.com) appointment re-scheduler - Colombian adaptation
 
 ## Initial Setup
 1. Create a `config.ini` file based on `config.ini.example`
-2. Install the required python packages: `pip3 install -r requirements.txt`
+2. Set up a virtual environment and install dependencies (see [Local Machine](#local-machine) below)
 3. Configure your notification channel(s) (see below)
 
 ## Executing the script
@@ -107,12 +107,35 @@ The script needs to run continuously to monitor for appointment availability. He
 
 The simplest option - run the script on your own computer.
 
+#### Using uv (Recommended)
+
+[uv](https://docs.astral.sh/uv/) is a fast Python package manager that handles virtual environments automatically.
+
 ```bash
-# Install dependencies
-pip3 install -r requirements.txt
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install dependencies
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 
 # Run the script
-python3 visa.py
+python visa.py
+```
+
+#### Using pip (Alternative)
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the script
+python visa.py
 ```
 
 **Pros:** Easy to set up and monitor
@@ -121,11 +144,11 @@ python3 visa.py
 **Tip:** Use `nohup` or `screen` to keep it running in the background:
 ```bash
 # Using nohup (continues after terminal closes)
-nohup python3 visa.py > visa.log 2>&1 &
+nohup python visa.py > visa.log 2>&1 &
 
 # Using screen (can reattach later)
 screen -S visa
-python3 visa.py
+python visa.py
 # Press Ctrl+A, then D to detach
 # Run 'screen -r visa' to reattach
 ```
