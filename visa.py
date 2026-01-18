@@ -238,6 +238,21 @@ driver = get_driver()
 
 
 def login() -> None:
+    """Navigate to the visa portal and complete the login process.
+
+    Performs the full login flow including:
+    1. Navigating to the visa portal landing page
+    2. Clicking through initial UI elements to bypass reCAPTCHA triggers
+    3. Navigating to the login form
+    4. Delegating credential entry to do_login_action()
+
+    The function uses deliberate timing delays (STEP_TIME) between interactions
+    to mimic human behavior and avoid triggering bot detection mechanisms.
+
+    Raises:
+        TimeoutException: If the login form or navigation elements don't appear
+            within 60 seconds.
+    """
     # Bypass reCAPTCHA
     driver.get(f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv")
     time.sleep(STEP_TIME)
@@ -261,6 +276,23 @@ def login() -> None:
 
 
 def do_login_action() -> None:
+    """Fill in and submit the login form with configured credentials.
+
+    Interacts with the login form elements to:
+    1. Enter the username (email) from config
+    2. Enter the password from config
+    3. Accept the privacy policy checkbox
+    4. Submit the form
+
+    Random delays (1-3 seconds) are added between each interaction to simulate
+    human typing speed and reduce the chance of bot detection. The function
+    waits up to 60 seconds for the "Continue" button to appear, indicating
+    successful authentication.
+
+    Raises:
+        TimeoutException: If login fails or the continue button doesn't appear
+            within 60 seconds.
+    """
     print("\tinput email")
     user = driver.find_element(By.ID, 'user_email')
     user.send_keys(USERNAME)
