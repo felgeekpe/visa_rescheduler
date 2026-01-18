@@ -31,6 +31,8 @@ Configuration:
         SCHEDULE_ID: Your appointment schedule ID (from the appointment URL)
         MY_SCHEDULE_DATE: Latest acceptable date (YYYY-MM-DD format)
         MY_SCHEDULE_DATE_START: Earliest acceptable date (YYYY-MM-DD format)
+        RELATIVE_END_DATE_DAYS: Optional - days from today (e.g., 14 for 2 weeks)
+            When set, overrides MY_SCHEDULE_DATE with a dynamic value
         COUNTRY_CODE: Country code for the portal (e.g., 'es-co' for Colombia)
         FACILITY_ID: Consulate/facility ID (e.g., 25 for Bogota)
 
@@ -71,7 +73,7 @@ import json
 import random
 import platform
 import configparser
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional, Union
 
 import requests
@@ -101,6 +103,14 @@ PASSWORD = config['USVISA']['PASSWORD']           # Account password
 SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']     # Appointment ID from URL
 MY_SCHEDULE_DATE_START = config['USVISA']['MY_SCHEDULE_DATE_START']  # Earliest acceptable date
 MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']              # Latest acceptable date (deadline)
+
+# Optional: Override MY_SCHEDULE_DATE with a relative date (days from today)
+# When set, filters appointments to only those within N days from now
+RELATIVE_END_DATE_DAYS = config['USVISA'].get('RELATIVE_END_DATE_DAYS', '').strip()
+if RELATIVE_END_DATE_DAYS:
+    days = int(RELATIVE_END_DATE_DAYS)
+    MY_SCHEDULE_DATE = (datetime.today() + timedelta(days=days)).strftime("%Y-%m-%d")
+    print(f"Using relative end date: {MY_SCHEDULE_DATE} ({days} days from today)")
 COUNTRY_CODE = config['USVISA']['COUNTRY_CODE']   # Portal locale (e.g., 'es-co' for Colombia)
 FACILITY_ID = config['USVISA']['FACILITY_ID']     # Consulate ID (e.g., 25 for Bogota)
 
