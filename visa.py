@@ -366,6 +366,24 @@ def get_time(date: str) -> str:
 
 
 def reschedule(date: str) -> None:
+    """Book a new appointment for the specified date.
+
+    Automates the appointment rescheduling form by:
+    1. Entering the new date in the date picker
+    2. Selecting an available time slot
+    3. Submitting the appointment form
+    4. Confirming the booking
+
+    On success, sets the global EXIT flag to True to stop the main loop.
+    Sends notifications for both success and failure outcomes.
+
+    Args:
+        date: The new appointment date in YYYY-MM-DD format.
+
+    Side effects:
+        Sets EXIT=True on successful reschedule.
+        Sends notification with result status.
+    """
     global EXIT
     print(f"Starting Reschedule ({date})")
     send_notification(f"Starting Reschedule ({date})")
@@ -410,6 +428,14 @@ def reschedule(date: str) -> None:
 
 
 def is_logged_in() -> bool:
+    """Check if the current browser session is authenticated.
+
+    Performs a simple check by looking for error messages in the page source.
+    This is a basic validation and may not catch all session expiry cases.
+
+    Returns:
+        True if no error text is found in the page, False otherwise.
+    """
     content = driver.page_source
     if(content.find("error") != -1):
         return False
@@ -417,6 +443,12 @@ def is_logged_in() -> bool:
 
 
 def print_dates(dates: list[dict[str, Any]]) -> None:
+    """Print available appointment dates to console for debugging.
+
+    Args:
+        dates: List of date dictionaries from get_date(), each containing
+            'date' and 'business_day' keys.
+    """
     print("Available dates:")
     for d in dates:
         print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
@@ -455,6 +487,14 @@ def get_available_date(dates: list[dict[str, Any]]) -> Optional[str]:
 
 
 def push_notification(dates: list[dict[str, Any]]) -> None:
+    """Send a notification with all available dates.
+
+    Formats the dates into a semicolon-separated string and sends
+    via all configured notification channels.
+
+    Args:
+        dates: List of date dictionaries to include in the notification.
+    """
     msg = "date: "
     for d in dates:
         msg = msg + d.get('date') + '; '
