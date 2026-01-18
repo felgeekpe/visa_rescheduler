@@ -501,11 +501,17 @@ def push_notification(dates: list[dict[str, Any]]) -> None:
     send_notification(msg)
 
 
+# =============================================================================
+# Main Execution Loop
+# =============================================================================
 if __name__ == "__main__":
+    # Outer loop: keeps running until successful reschedule (EXIT=True)
     while not EXIT:
         try:
             login()
             retry_count = 0
+            # Inner loop: allows up to 6 retries before forcing re-login
+            # This handles transient errors without requiring full re-authentication
             while retry_count <= 6:
                 try:
                     print("------------------")
@@ -513,12 +519,14 @@ if __name__ == "__main__":
                     print(f"Retry count: {retry_count}")
                     print()
 
+                    # Fetch only top 5 dates to reduce processing time
                     dates = get_date()[:5]
                     print_dates(dates)
                     date = get_available_date(dates)
                     print()
                     print(f"New date: {date}")
                     if date:
+                        # Found a date in range - attempt to book it
                         reschedule(date)
                         push_notification(dates)
 
@@ -527,19 +535,25 @@ if __name__ == "__main__":
                         break
 
                     if not dates:
+                        # Empty list may indicate rate limiting or temporary ban
+                        # Use longer cooldown to avoid further restrictions
                         msg = "List is empty"
                         print(msg)
                         time.sleep(COOLDOWN_TIME)
                     else:
+                        # Normal polling interval between availability checks
                         time.sleep(RETRY_TIME)
 
                 except:
+                    # Increment retry counter and continue - may be transient error
                     retry_count += 1
                     send_notification("Exception occurred!")
                     time.sleep(RETRY_TIME)
+            # Exhausted all retries without success - likely session expired
             if not EXIT:
                 send_notification("HELP! Crashed.")
         except Exception as e:
+            # Login failure - wait longer before retrying with fresh browser
             print(f"Login failed with exception: {e}")
             send_notification("Exception occurred during login!")
             time.sleep(EXCEPTION_TIME)
