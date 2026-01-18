@@ -319,6 +319,22 @@ def do_login_action() -> None:
 
 
 def get_date() -> list[dict[str, Any]]:
+    """Fetch available appointment dates from the visa portal API.
+
+    Uses JavaScript-executed XMLHttpRequest to bypass CORS restrictions and
+    make an authenticated API call within the browser context. The session
+    cookie is extracted from the browser and included in the request headers.
+
+    Returns:
+        List of date dictionaries, each containing:
+            - 'date': Date string in YYYY-MM-DD format
+            - 'business_day': Boolean indicating if it's a business day
+
+    Note:
+        The XHR approach is used instead of Python requests because the API
+        requires the session cookie which is httpOnly and not accessible
+        outside the browser context.
+    """
     driver.get(APPOINTMENT_URL)
     session = driver.get_cookie("_yatri_session")["value"]
     script = "var req = new XMLHttpRequest();req.open('GET', '" + str(DATE_URL) + "', false);req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');req.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); req.setRequestHeader('Cookie', '_yatri_session=" + session + "'); req.send(null);return req.responseText;"
@@ -326,6 +342,18 @@ def get_date() -> list[dict[str, Any]]:
     return json.loads(NEW_GET)
 
 def get_time(date: str) -> str:
+    """Fetch available time slots for a specific appointment date.
+
+    Queries the visa portal API for available appointment times on the
+    given date. Uses the same XHR approach as get_date() for authentication.
+
+    Args:
+        date: The appointment date in YYYY-MM-DD format.
+
+    Returns:
+        The last available time slot string (e.g., "10:30").
+        Returns the last slot as it's typically less contested.
+    """
     time_url = TIME_URL % date
     session = driver.get_cookie("_yatri_session")["value"]
     script = JS_SCRIPT % (str(time_url), session)
@@ -396,6 +424,20 @@ def print_dates(dates: list[dict[str, Any]]) -> None:
 
 
 def get_available_date(dates: list[dict[str, Any]]) -> Optional[str]:
+    """Find the first available date within the configured date range.
+
+    Iterates through the provided dates and returns the first one that falls
+    within the acceptable range defined by MY_SCHEDULE_DATE_START and
+    MY_SCHEDULE_DATE configuration values.
+
+    Args:
+        dates: List of date dictionaries from get_date(), each containing
+            a 'date' key with YYYY-MM-DD format string.
+
+    Returns:
+        The first matching date string in YYYY-MM-DD format, or None if
+        no dates fall within the acceptable range.
+    """
 
     def is_in_period(date: str, PSD: datetime, PED: datetime) -> bool:
         new_date = datetime.strptime(date, "%Y-%m-%d")
