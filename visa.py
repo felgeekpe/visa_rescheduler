@@ -78,41 +78,77 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 
+# =============================================================================
+# Configuration Loading
+# =============================================================================
+# Load settings from config.ini file. See config.ini.example for template.
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-USERNAME = config['USVISA']['USERNAME']
-PASSWORD = config['USVISA']['PASSWORD']
-SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']
-MY_SCHEDULE_DATE_START = config['USVISA']['MY_SCHEDULE_DATE_START']
-MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']
-COUNTRY_CODE = config['USVISA']['COUNTRY_CODE'] 
-FACILITY_ID = config['USVISA']['FACILITY_ID']
+# -----------------------------------------------------------------------------
+# Account & Appointment Settings (from [USVISA] section)
+# -----------------------------------------------------------------------------
+USERNAME = config['USVISA']['USERNAME']           # Login email for usvisa-info.com
+PASSWORD = config['USVISA']['PASSWORD']           # Account password
+SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']     # Appointment ID from URL
+MY_SCHEDULE_DATE_START = config['USVISA']['MY_SCHEDULE_DATE_START']  # Earliest acceptable date
+MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']              # Latest acceptable date (deadline)
+COUNTRY_CODE = config['USVISA']['COUNTRY_CODE']   # Portal locale (e.g., 'es-co' for Colombia)
+FACILITY_ID = config['USVISA']['FACILITY_ID']     # Consulate ID (e.g., 25 for Bogota)
 
-SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']
-PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']
-PUSH_USER = config['PUSHOVER']['PUSH_USER']
+# -----------------------------------------------------------------------------
+# Notification Services (all optional)
+# -----------------------------------------------------------------------------
+SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']  # Email notifications via SendGrid
+PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']              # Pushover API token
+PUSH_USER = config['PUSHOVER']['PUSH_USER']                # Pushover user key
+SLACK_WEBHOOK = config['SLACK']['SLACK_WEBHOOK']           # Slack webhook URL
 
-LOCAL_USE = config['CHROMEDRIVER'].getboolean('LOCAL_USE')
-HUB_ADDRESS = config['CHROMEDRIVER']['HUB_ADDRESS']
+# -----------------------------------------------------------------------------
+# WebDriver Configuration (from [CHROMEDRIVER] section)
+# -----------------------------------------------------------------------------
+LOCAL_USE = config['CHROMEDRIVER'].getboolean('LOCAL_USE')  # True=local Chrome, False=remote
+HUB_ADDRESS = config['CHROMEDRIVER']['HUB_ADDRESS']         # Remote WebDriver URL (if LOCAL_USE=False)
 
+# -----------------------------------------------------------------------------
+# UI Element Locators
+# -----------------------------------------------------------------------------
+# XPath for the "Continue" button (Spanish: "Continuar") used in navigation
 REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
 
-SLACK_WEBHOOK = config['SLACK']['SLACK_WEBHOOK']
 
+# -----------------------------------------------------------------------------
+# Custom Date Filter Function
+# -----------------------------------------------------------------------------
+# MY_CONDITION allows additional filtering beyond the date range.
+# Return True to accept the date, False to reject it.
+# Example: Only accept dates in November on or after the 5th:
+#   def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
+def MY_CONDITION(month, day): return True  # Accept all dates within range
 
-# def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
-def MY_CONDITION(month, day): return True # No custom condition wanted for the new scheduled date
+# -----------------------------------------------------------------------------
+# Timing Constants (in seconds)
+# -----------------------------------------------------------------------------
+# Adjust these values based on network latency and server responsiveness
+STEP_TIME = 0.5         # Delay between form interactions (clicks, inputs)
+RETRY_TIME = 60*3       # Interval between availability checks (3 minutes)
+EXCEPTION_TIME = 60*30  # Wait time after errors before retrying (30 minutes)
+COOLDOWN_TIME = 60*10   # Wait time when no appointments available (10 minutes)
 
-STEP_TIME = 0.5  # time between steps (interactions with forms): 0.5 seconds
-RETRY_TIME = 60*3  # wait time between retries/checks for available dates: 10 minutes
-EXCEPTION_TIME = 60*30  # wait time when an exception occurs: 30 minutes
-COOLDOWN_TIME = 60*10  # wait time when temporary banned (empty list): 60 minutes
-
+# -----------------------------------------------------------------------------
+# API Endpoints
+# -----------------------------------------------------------------------------
+# These URLs are constructed using the country code, schedule ID, and facility ID
 DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
 TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
 APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment?confirmed_limit_message=1"
-# APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment?applicants%5B%5D=59218750&applicants%5B%5D=59218801&applicants%5B%5D=59218832&applicants%5B%5D=64196968&confirmed_limit_message=1&commit=Continuar"
+
+# -----------------------------------------------------------------------------
+# JavaScript for XHR Requests
+# -----------------------------------------------------------------------------
+# This script is executed in the browser to make authenticated API calls.
+# It bypasses CORS restrictions by running within the page context and
+# uses the session cookie for authentication.
 JS_SCRIPT = ("var req = new XMLHttpRequest();"
                 f"req.open('GET', '%s', false);"
                 "req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');"
@@ -120,6 +156,11 @@ JS_SCRIPT = ("var req = new XMLHttpRequest();"
                 f"req.setRequestHeader('Cookie', '_yatri_session=%s');"
                 "req.send(null);"
                 "return req.responseText;")
+
+# -----------------------------------------------------------------------------
+# Global State
+# -----------------------------------------------------------------------------
+# Set to True when a successful reschedule occurs to stop the main loop
 EXIT = False
 
 
