@@ -430,7 +430,7 @@ def get_date() -> list[dict[str, Any]]:
     cookies = {"_yatri_session": session_cookie}
 
     response = requests.get(DATE_URL, headers=headers, cookies=cookies)
-    print(f"API response ({response.status_code}): {response.text[:200] if len(response.text) > 200 else response.text}")
+    print(f"API response: {response.status_code} OK ({len(response.text)} bytes)")
 
     if response.status_code != 200:
         raise Exception(f"API error: HTTP {response.status_code}")
@@ -557,9 +557,9 @@ def print_dates(dates: list[dict[str, Any]]) -> None:
         dates: List of date dictionaries from get_date(), each containing
             'date' and 'business_day' keys.
     """
-    print("Available dates:")
+    print(f"Found {len(dates)} available dates (showing first 5):")
     for d in dates:
-        print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
+        print(f"  • {d.get('date')}")
     print()
 
 
@@ -584,14 +584,15 @@ def get_available_date(dates: list[dict[str, Any]]) -> Optional[str]:
         result = ( PED > new_date and new_date > PSD )
         return result
 
-    print("Checking for an earlier date:")
     PED = datetime.strptime(MY_SCHEDULE_DATE, "%Y-%m-%d")
     PSD = datetime.strptime(MY_SCHEDULE_DATE_START, "%Y-%m-%d")
+    print(f"Filtering for dates between {PSD.date()} and {PED.date()}...")
     for d in dates:
         date = d.get('date')
         if is_in_period(date, PSD, PED):
+            print(f"✅ Found date in range: {date}")
             return date
-    print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")
+    print(f"❌ No dates in target range")
 
 
 def push_notification(dates: list[dict[str, Any]]) -> None:
@@ -612,6 +613,29 @@ def push_notification(dates: list[dict[str, Any]]) -> None:
 # Main Execution Loop
 # =============================================================================
 if __name__ == "__main__":
+    # Display startup configuration summary
+    print("=" * 60)
+    print("US VISA APPOINTMENT RESCHEDULER")
+    print("=" * 60)
+    print(f"Target date range: {MY_SCHEDULE_DATE_START} to {MY_SCHEDULE_DATE}")
+    print(f"Facility ID: {FACILITY_ID}")
+    print(f"Schedule ID: {SCHEDULE_ID}")
+    print("-" * 60)
+    print("Timing configuration:")
+    print(f"  Retry interval:    {RETRY_TIME}s ({RETRY_TIME // 60}m)")
+    print(f"  Cooldown interval: {COOLDOWN_TIME}s ({COOLDOWN_TIME // 60}m)")
+    print(f"  Exception wait:    {EXCEPTION_TIME}s ({EXCEPTION_TIME // 60}m)")
+    print("-" * 60)
+    notifications = []
+    if TELEGRAM_BOT_TOKEN: notifications.append("Telegram")
+    if DISCORD_WEBHOOK: notifications.append("Discord")
+    if SENDGRID_API_KEY: notifications.append("SendGrid")
+    if PUSH_TOKEN: notifications.append("Pushover")
+    if SLACK_WEBHOOK: notifications.append("Slack")
+    print(f"Notifications: {', '.join(notifications) if notifications else 'None configured'}")
+    print("=" * 60)
+    print()
+
     # Outer loop: keeps running until successful reschedule (EXIT=True)
     while not EXIT:
         try:
@@ -621,17 +645,15 @@ if __name__ == "__main__":
             # This handles transient errors without requiring full re-authentication
             while retry_count <= 6:
                 try:
-                    print("------------------")
-                    print(datetime.today())
-                    print(f"Retry count: {retry_count}")
                     print()
+                    print("=" * 60)
+                    print(f"📡 CHECK #{retry_count + 1} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    print("=" * 60)
 
                     # Fetch only top 5 dates to reduce processing time
                     dates = get_date()[:5]
                     print_dates(dates)
                     date = get_available_date(dates)
-                    print()
-                    print(f"New date: {date}")
                     if date:
                         # Found a date in range - attempt to book it
                         reschedule(date)
@@ -644,11 +666,17 @@ if __name__ == "__main__":
                     if not dates:
                         # Empty list may indicate rate limiting or temporary ban
                         # Use longer cooldown to avoid further restrictions
-                        msg = "List is empty"
-                        print(msg)
+                        next_check = datetime.now() + timedelta(seconds=COOLDOWN_TIME)
+                        print(f"\n⏸️  COOLDOWN: No dates returned (possible rate limit)")
+                        print(f"   Next action: Check for available dates")
+                        print(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
                         time.sleep(COOLDOWN_TIME)
                     else:
                         # Normal polling interval between availability checks
+                        next_check = datetime.now() + timedelta(seconds=RETRY_TIME)
+                        print(f"\n⏳ WAITING: No dates in target range")
+                        print(f"   Next action: Check for available dates")
+                        print(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
                         time.sleep(RETRY_TIME)
 
                 except Exception as e:
@@ -659,14 +687,24 @@ if __name__ == "__main__":
                     print(f"Exception in main loop: {e}")
                     print(error_details)
                     send_notification(f"⚠️ <b>Error</b>\n\n{type(e).__name__}: {e}")
+                    next_check = datetime.now() + timedelta(seconds=RETRY_TIME)
+                    print(f"\n🔄 RETRY: Error occurred (attempt {retry_count}/6)")
+                    print(f"   Next action: Retry date check")
+                    print(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
                     time.sleep(RETRY_TIME)
             # Exhausted all retries without success - likely session expired
             if not EXIT:
+                print(f"\n🚨 MAX RETRIES: Session likely expired")
+                print(f"   Next action: Re-login and restart monitoring")
                 send_notification("🚨 <b>Crashed</b>\n\nMax retries exceeded, restarting...")
         except Exception as e:
             # Login failure - wait longer before retrying with fresh browser
             print(f"Login failed with exception: {e}")
             send_notification("⚠️ <b>Login Error</b>\n\nException during login, retrying...")
+            next_retry = datetime.now() + timedelta(seconds=EXCEPTION_TIME)
+            print(f"\n💥 LOGIN FAILED: {type(e).__name__}")
+            print(f"   Next action: Reinitialize browser and retry login")
+            print(f"   Next retry at: {next_retry.strftime('%H:%M:%S')}")
             time.sleep(EXCEPTION_TIME)
             driver.quit()
             driver = get_driver()  # Reinitialize the driver
