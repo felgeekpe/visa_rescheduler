@@ -430,7 +430,7 @@ def reschedule(date: str) -> None:
     """
     global EXIT
     print(f"Starting Reschedule ({date})")
-    send_notification(f"Starting Reschedule ({date})")
+    send_notification(f"🔄 <b>Rescheduling</b>\n\nAttempting: <code>{date}</code>")
 
     print("\tinput date")
     date_input = driver.find_element(By.ID, 'appointments_consulate_appointment_date')
@@ -463,11 +463,11 @@ def reschedule(date: str) -> None:
     # Check if the following text is present "La programación de su cita se ha realizado correctamente"
 
     if(driver.page_source.find('La programación de su cita se ha realizado correctamente') != -1):
-        msg = f"Rescheduled Successfully! {date}"
+        msg = f"✅ <b>Success!</b>\n\nNew appointment: <code>{date}</code>"
         send_notification(msg)
         EXIT = True
     else:
-        msg = f"Reschedule Failed. {date}"
+        msg = f"❌ <b>Failed</b>\n\nCould not book: <code>{date}</code>"
         send_notification(msg)
 
 
@@ -539,9 +539,8 @@ def push_notification(dates: list[dict[str, Any]]) -> None:
     Args:
         dates: List of date dictionaries to include in the notification.
     """
-    msg = "date: "
-    for d in dates:
-        msg = msg + d.get('date') + '; '
+    date_list = "\n".join(f"• {d.get('date')}" for d in dates)
+    msg = f"📅 <b>Dates Available</b>\n\n{date_list}"
     send_notification(msg)
 
 
@@ -591,15 +590,15 @@ if __name__ == "__main__":
                 except:
                     # Increment retry counter and continue - may be transient error
                     retry_count += 1
-                    send_notification("Exception occurred!")
+                    send_notification("⚠️ <b>Error</b>\n\nException occurred, retrying...")
                     time.sleep(RETRY_TIME)
             # Exhausted all retries without success - likely session expired
             if not EXIT:
-                send_notification("HELP! Crashed.")
+                send_notification("🚨 <b>Crashed</b>\n\nMax retries exceeded, restarting...")
         except Exception as e:
             # Login failure - wait longer before retrying with fresh browser
             print(f"Login failed with exception: {e}")
-            send_notification("Exception occurred during login!")
+            send_notification("⚠️ <b>Login Error</b>\n\nException during login, retrying...")
             time.sleep(EXCEPTION_TIME)
             driver.quit()
             driver = get_driver()  # Reinitialize the driver
