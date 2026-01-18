@@ -1,4 +1,63 @@
 # -*- coding: utf8 -*-
+"""
+US VISA Appointment Rescheduler for ais.usvisa-info.com
+
+This script monitors the US visa appointment system for earlier available slots
+and automatically reschedules when a date within the desired range becomes available.
+It was originally designed for Colombian applicants but can be adapted for other countries.
+
+Overview:
+    The script uses Selenium WebDriver to automate browser interactions with the
+    usvisa-info.com system. It performs the following workflow:
+
+    1. Logs into the visa appointment portal
+    2. Polls for available appointment dates using JavaScript-executed XHR requests
+    3. Filters dates within the configured range (MY_SCHEDULE_DATE_START to MY_SCHEDULE_DATE)
+    4. Automatically reschedules if an earlier date is found
+    5. Sends notifications via Pushover, SendGrid email, and/or Slack
+
+Prerequisites:
+    - An existing US visa appointment scheduled on ais.usvisa-info.com
+    - Google Chrome browser installed
+    - Python 3.x with required packages (see requirements.txt)
+    - Valid credentials for the visa appointment portal
+
+Configuration:
+    Create a config.ini file with the following sections:
+
+    [USVISA]
+        USERNAME: Login email for usvisa-info.com
+        PASSWORD: Account password
+        SCHEDULE_ID: Your appointment schedule ID (from the appointment URL)
+        MY_SCHEDULE_DATE: Latest acceptable date (YYYY-MM-DD format)
+        MY_SCHEDULE_DATE_START: Earliest acceptable date (YYYY-MM-DD format)
+        COUNTRY_CODE: Country code for the portal (e.g., 'es-co' for Colombia)
+        FACILITY_ID: Consulate/facility ID (e.g., 25 for Bogota)
+
+    [CHROMEDRIVER]
+        LOCAL_USE: True for local Chrome, False for remote WebDriver
+        HUB_ADDRESS: Remote WebDriver URL (required if LOCAL_USE is False)
+
+    [PUSHOVER] (optional)
+        PUSH_TOKEN: Pushover API token
+        PUSH_USER: Pushover user key
+
+    [SENDGRID] (optional)
+        SENDGRID_API_KEY: SendGrid API key for email notifications
+
+    [SLACK] (optional)
+        SLACK_WEBHOOK: Slack webhook URL for notifications
+
+Usage:
+    $ python3 visa.py
+
+    The script runs continuously until a successful reschedule or manual termination.
+
+Note:
+    - The script targets Spanish-language pages (Colombian locale)
+    - Timing constants can be adjusted based on system responsiveness
+    - A successful reschedule sets EXIT=True to stop execution
+"""
 
 import time
 import json
