@@ -73,7 +73,9 @@ import json
 import random
 import platform
 import configparser
+import logging
 from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
 from typing import Any, Optional, Union
 
 import requests
@@ -87,6 +89,38 @@ from webdriver_manager.chrome import ChromeDriverManager
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
+
+# =============================================================================
+# Logging Setup
+# =============================================================================
+# Configure logging to write to both console and file
+LOG_FILE = "visa_rescheduler.log"
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# Create logger
+logger = logging.getLogger("visa_rescheduler")
+logger.setLevel(logging.INFO)
+
+# File handler with rotation (5MB max, keep 3 backups)
+file_handler = RotatingFileHandler(
+    LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
+
+# Add handlers to logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+def log(msg: str, level: str = "info") -> None:
+    """Log a message to both console and file."""
+    getattr(logger, level)(msg)
 
 # =============================================================================
 # Configuration Loading
@@ -104,7 +138,7 @@ SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']     # Appointment ID from URL
 MY_SCHEDULE_DATE_START = config.get('USVISA', 'MY_SCHEDULE_DATE_START', fallback='').strip()
 if not MY_SCHEDULE_DATE_START:
     MY_SCHEDULE_DATE_START = datetime.today().strftime("%Y-%m-%d")
-    print(f"No MY_SCHEDULE_DATE_START set, defaulting to today: {MY_SCHEDULE_DATE_START}")
+    log(f"No MY_SCHEDULE_DATE_START set, defaulting to today: {MY_SCHEDULE_DATE_START}")
 MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']              # Latest acceptable date (deadline)
 
 # Optional: Override MY_SCHEDULE_DATE with a relative date (days from today)
@@ -113,7 +147,7 @@ RELATIVE_END_DATE_DAYS = config['USVISA'].get('RELATIVE_END_DATE_DAYS', '').stri
 if RELATIVE_END_DATE_DAYS:
     days = int(RELATIVE_END_DATE_DAYS)
     MY_SCHEDULE_DATE = (datetime.today() + timedelta(days=days)).strftime("%Y-%m-%d")
-    print(f"Using relative end date: {MY_SCHEDULE_DATE} ({days} days from today)")
+    log(f"Using relative end date: {MY_SCHEDULE_DATE} ({days} days from today)")
 COUNTRY_CODE = config['USVISA']['COUNTRY_CODE']   # Portal locale (e.g., 'es-co' for Colombia)
 FACILITY_ID = config['USVISA']['FACILITY_ID']     # Consulate ID (e.g., 25 for Bogota)
 
@@ -221,11 +255,11 @@ def send_notification(msg: str) -> None:
         - Pushover: Sends push notification to mobile device
         - Slack: Posts message to configured webhook channel
     """
-    print(f"Sending notification: {msg}")
+    log(f"Sending notification: {msg}")
 
     # Telegram - fast, reliable, and free
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        print("  -> Sending via Telegram...")
+        log("  -> Sending via Telegram...")
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -235,28 +269,28 @@ def send_notification(msg: str) -> None:
         try:
             resp = requests.post(url, data=data)
             if resp.ok:
-                print("  -> Telegram: OK")
+                log("  -> Telegram: OK")
             else:
-                print(f"  -> Telegram: Failed ({resp.status_code}: {resp.text})")
+                log(f"  -> Telegram: Failed ({resp.status_code}: {resp.text})", "warning")
         except Exception as e:
-            print(f"  -> Telegram: Exception - {e}")
+            log(f"  -> Telegram: Exception - {e}", "error")
 
     # Discord - popular for gaming/tech communities
     if DISCORD_WEBHOOK:
-        print("  -> Sending via Discord...")
+        log("  -> Sending via Discord...")
         headers = {'Content-type': 'application/json'}
         payload = {'content': msg}
         try:
             resp = requests.post(DISCORD_WEBHOOK, data=json.dumps(payload), headers=headers)
             if resp.ok:
-                print("  -> Discord: OK")
+                log("  -> Discord: OK")
             else:
-                print(f"  -> Discord: Failed ({resp.status_code}: {resp.text})")
+                log(f"  -> Discord: Failed ({resp.status_code}: {resp.text})", "warning")
         except Exception as e:
-            print(f"  -> Discord: Exception - {e}")
+            log(f"  -> Discord: Exception - {e}", "error")
 
     if SENDGRID_API_KEY:
-        print("  -> Sending via SendGrid...")
+        log("  -> Sending via SendGrid...")
         message = Mail(
             from_email=USERNAME,
             to_emails=USERNAME,
@@ -265,12 +299,12 @@ def send_notification(msg: str) -> None:
         try:
             sg = SendGridAPIClient(SENDGRID_API_KEY)
             response = sg.send(message)
-            print(f"  -> SendGrid: OK ({response.status_code})")
+            log(f"  -> SendGrid: OK ({response.status_code})")
         except Exception as e:
-            print(f"  -> SendGrid: Failed - {e}")
+            log(f"  -> SendGrid: Failed - {e}", "error")
 
     if PUSH_TOKEN:
-        print("  -> Sending via Pushover...")
+        log("  -> Sending via Pushover...")
         url = "https://api.pushover.net/1/messages.json"
         data = {
             "token": PUSH_TOKEN,
@@ -280,24 +314,24 @@ def send_notification(msg: str) -> None:
         try:
             resp = requests.post(url, data=data)
             if resp.ok:
-                print("  -> Pushover: OK")
+                log("  -> Pushover: OK")
             else:
-                print(f"  -> Pushover: Failed ({resp.status_code}: {resp.text})")
+                log(f"  -> Pushover: Failed ({resp.status_code}: {resp.text})", "warning")
         except Exception as e:
-            print(f"  -> Pushover: Exception - {e}")
+            log(f"  -> Pushover: Exception - {e}", "error")
 
     if SLACK_WEBHOOK:
-        print("  -> Sending via Slack...")
+        log("  -> Sending via Slack...")
         headers = {'Content-type': 'application/json'}
         payload = {'text': msg}
         try:
             resp = requests.post(SLACK_WEBHOOK, data=json.dumps(payload), headers=headers)
             if resp.ok:
-                print("  -> Slack: OK")
+                log("  -> Slack: OK")
             else:
-                print(f"  -> Slack: Failed ({resp.status_code}: {resp.text})")
+                log(f"  -> Slack: Failed ({resp.status_code}: {resp.text})", "warning")
         except Exception as e:
-            print(f"  -> Slack: Exception - {e}")
+            log(f"  -> Slack: Exception - {e}", "error")
 
 
 def get_driver() -> Union[webdriver.Chrome, webdriver.Remote]:
@@ -347,14 +381,14 @@ def login() -> None:
     a.click()
     time.sleep(STEP_TIME)
 
-    print("Login start...")
+    log("Login start...")
     href = driver.find_element(By.XPATH, '//*[@id="header"]/nav/div[1]/div[1]/div[2]/div[1]/ul/li[3]/a')
-   
+
     href.click()
     time.sleep(STEP_TIME)
     Wait(driver, 60).until(EC.presence_of_element_located((By.NAME, "commit")))
 
-    print("\tclick bounce")
+    log("  click bounce")
     a = driver.find_element(By.XPATH, '//a[@class="down-arrow bounce"]')
     a.click()
     time.sleep(STEP_TIME)
@@ -380,29 +414,29 @@ def do_login_action() -> None:
         TimeoutException: If login fails or the continue button doesn't appear
             within 60 seconds.
     """
-    print("\tinput email")
+    log("  input email")
     user = driver.find_element(By.ID, 'user_email')
     user.send_keys(USERNAME)
     time.sleep(random.randint(1, 3))
 
-    print("\tinput pwd")
+    log("  input pwd")
     pw = driver.find_element(By.ID, 'user_password')
     pw.send_keys(PASSWORD)
     time.sleep(random.randint(1, 3))
 
-    print("\tclick privacy")
+    log("  click privacy")
     box = driver.find_element(By.CLASS_NAME, 'icheckbox')
     box .click()
     time.sleep(random.randint(1, 3))
 
-    print("\tcommit")
+    log("  commit")
     btn = driver.find_element(By.NAME, 'commit')
     btn.click()
     time.sleep(random.randint(1, 3))
 
     Wait(driver, 60).until(
         EC.presence_of_element_located((By.XPATH, REGEX_CONTINUE)))
-    print("\tlogin successful!")
+    log("  login successful!")
 
 
 def get_date() -> list[dict[str, Any]]:
@@ -430,7 +464,7 @@ def get_date() -> list[dict[str, Any]]:
     cookies = {"_yatri_session": session_cookie}
 
     response = requests.get(DATE_URL, headers=headers, cookies=cookies)
-    print(f"API response: {response.status_code} OK ({len(response.text)} bytes)")
+    log(f"API response: {response.status_code} OK ({len(response.text)} bytes)")
 
     if response.status_code != 200:
         raise Exception(f"API error: HTTP {response.status_code}")
@@ -467,9 +501,9 @@ def get_time(date: str) -> str:
 
     response = requests.get(time_url, headers=headers, cookies=cookies)
     data = response.json()
-    print(f"Got time successfully! {data}")
+    log(f"Got time successfully! {data}")
     time = data.get("available_times")[-1]
-    print(f"Got time successfully! {date} {time}")
+    log(f"Got time successfully! {date} {time}")
     return time
 
 
@@ -493,27 +527,27 @@ def reschedule(date: str) -> None:
         Sends notification with result status.
     """
     global EXIT
-    print(f"Starting Reschedule ({date})")
+    log(f"Starting Reschedule ({date})")
     send_notification(f"🔄 <b>Rescheduling</b>\n\nAttempting: <code>{date}</code>")
 
-    print("\tinput date")
+    log("  input date")
     date_input = driver.find_element(By.ID, 'appointments_consulate_appointment_date')
     driver.execute_script("arguments[0].removeAttribute('readonly')", date_input)
     date_input.send_keys(date)
     time.sleep(random.randint(1, 2))
-    print("\tselect day")
+    log("  select day")
     current_day = driver.find_element(By.CLASS_NAME, 'ui-datepicker-current-day')
     current_day.find_element(By.XPATH, './a').click()
     time.sleep(random.randint(1, 2))
 
-    print("\tselect time")
+    log("  select time")
     select = driver.find_element(By.ID, 'appointments_consulate_appointment_time')
     # select first available option
     select.find_element(By.XPATH, './option[2]').click()
-    
+
     time.sleep(random.randint(1, 2))
 
-    print("\taccept appointment")
+    log("  accept appointment")
     accept = driver.find_element(By.ID, 'appointments_submit')
     accept.click()
     time.sleep(random.randint(1, 2))
@@ -557,10 +591,9 @@ def print_dates(dates: list[dict[str, Any]]) -> None:
         dates: List of date dictionaries from get_date(), each containing
             'date' and 'business_day' keys.
     """
-    print(f"Found {len(dates)} available dates (showing first 5):")
+    log(f"Found {len(dates)} available dates (showing first 5):")
     for d in dates:
-        print(f"  • {d.get('date')}")
-    print()
+        log(f"  • {d.get('date')}")
 
 
 def get_available_date(dates: list[dict[str, Any]]) -> Optional[str]:
@@ -586,13 +619,13 @@ def get_available_date(dates: list[dict[str, Any]]) -> Optional[str]:
 
     PED = datetime.strptime(MY_SCHEDULE_DATE, "%Y-%m-%d")
     PSD = datetime.strptime(MY_SCHEDULE_DATE_START, "%Y-%m-%d")
-    print(f"Filtering for dates between {PSD.date()} and {PED.date()}...")
+    log(f"Filtering for dates between {PSD.date()} and {PED.date()}...")
     for d in dates:
         date = d.get('date')
         if is_in_period(date, PSD, PED):
-            print(f"✅ Found date in range: {date}")
+            log(f"✅ Found date in range: {date}")
             return date
-    print(f"❌ No dates in target range")
+    log(f"❌ No dates in target range")
 
 
 def push_notification(dates: list[dict[str, Any]]) -> None:
@@ -614,27 +647,27 @@ def push_notification(dates: list[dict[str, Any]]) -> None:
 # =============================================================================
 if __name__ == "__main__":
     # Display startup configuration summary
-    print("=" * 60)
-    print("US VISA APPOINTMENT RESCHEDULER")
-    print("=" * 60)
-    print(f"Target date range: {MY_SCHEDULE_DATE_START} to {MY_SCHEDULE_DATE}")
-    print(f"Facility ID: {FACILITY_ID}")
-    print(f"Schedule ID: {SCHEDULE_ID}")
-    print("-" * 60)
-    print("Timing configuration:")
-    print(f"  Retry interval:    {RETRY_TIME}s ({RETRY_TIME // 60}m)")
-    print(f"  Cooldown interval: {COOLDOWN_TIME}s ({COOLDOWN_TIME // 60}m)")
-    print(f"  Exception wait:    {EXCEPTION_TIME}s ({EXCEPTION_TIME // 60}m)")
-    print("-" * 60)
+    log("=" * 60)
+    log("US VISA APPOINTMENT RESCHEDULER")
+    log("=" * 60)
+    log(f"Target date range: {MY_SCHEDULE_DATE_START} to {MY_SCHEDULE_DATE}")
+    log(f"Facility ID: {FACILITY_ID}")
+    log(f"Schedule ID: {SCHEDULE_ID}")
+    log(f"Log file: {LOG_FILE}")
+    log("-" * 60)
+    log("Timing configuration:")
+    log(f"  Retry interval:    {RETRY_TIME}s ({RETRY_TIME // 60}m)")
+    log(f"  Cooldown interval: {COOLDOWN_TIME}s ({COOLDOWN_TIME // 60}m)")
+    log(f"  Exception wait:    {EXCEPTION_TIME}s ({EXCEPTION_TIME // 60}m)")
+    log("-" * 60)
     notifications = []
     if TELEGRAM_BOT_TOKEN: notifications.append("Telegram")
     if DISCORD_WEBHOOK: notifications.append("Discord")
     if SENDGRID_API_KEY: notifications.append("SendGrid")
     if PUSH_TOKEN: notifications.append("Pushover")
     if SLACK_WEBHOOK: notifications.append("Slack")
-    print(f"Notifications: {', '.join(notifications) if notifications else 'None configured'}")
-    print("=" * 60)
-    print()
+    log(f"Notifications: {', '.join(notifications) if notifications else 'None configured'}")
+    log("=" * 60)
 
     # Outer loop: keeps running until successful reschedule (EXIT=True)
     while not EXIT:
@@ -645,10 +678,9 @@ if __name__ == "__main__":
             # This handles transient errors without requiring full re-authentication
             while retry_count <= 6:
                 try:
-                    print()
-                    print("=" * 60)
-                    print(f"📡 CHECK #{retry_count + 1} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                    print("=" * 60)
+                    log("=" * 60)
+                    log(f"📡 CHECK #{retry_count + 1}")
+                    log("=" * 60)
 
                     # Fetch only top 5 dates to reduce processing time
                     dates = get_date()[:5]
@@ -660,23 +692,23 @@ if __name__ == "__main__":
                         push_notification(dates)
 
                     if(EXIT):
-                        print("------------------exit")
+                        log("Exiting - appointment successfully rescheduled")
                         break
 
                     if not dates:
                         # Empty list may indicate rate limiting or temporary ban
                         # Use longer cooldown to avoid further restrictions
                         next_check = datetime.now() + timedelta(seconds=COOLDOWN_TIME)
-                        print(f"\n⏸️  COOLDOWN: No dates returned (possible rate limit)")
-                        print(f"   Next action: Check for available dates")
-                        print(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
+                        log(f"⏸️  COOLDOWN: No dates returned (possible rate limit)")
+                        log(f"   Next action: Check for available dates")
+                        log(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
                         time.sleep(COOLDOWN_TIME)
                     else:
                         # Normal polling interval between availability checks
                         next_check = datetime.now() + timedelta(seconds=RETRY_TIME)
-                        print(f"\n⏳ WAITING: No dates in target range")
-                        print(f"   Next action: Check for available dates")
-                        print(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
+                        log(f"⏳ WAITING: No dates in target range")
+                        log(f"   Next action: Check for available dates")
+                        log(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
                         time.sleep(RETRY_TIME)
 
                 except Exception as e:
@@ -684,27 +716,27 @@ if __name__ == "__main__":
                     retry_count += 1
                     import traceback
                     error_details = traceback.format_exc()
-                    print(f"Exception in main loop: {e}")
-                    print(error_details)
+                    log(f"Exception in main loop: {e}", "error")
+                    log(error_details, "error")
                     send_notification(f"⚠️ <b>Error</b>\n\n{type(e).__name__}: {e}")
                     next_check = datetime.now() + timedelta(seconds=RETRY_TIME)
-                    print(f"\n🔄 RETRY: Error occurred (attempt {retry_count}/6)")
-                    print(f"   Next action: Retry date check")
-                    print(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
+                    log(f"🔄 RETRY: Error occurred (attempt {retry_count}/6)", "warning")
+                    log(f"   Next action: Retry date check")
+                    log(f"   Next check at: {next_check.strftime('%H:%M:%S')}")
                     time.sleep(RETRY_TIME)
             # Exhausted all retries without success - likely session expired
             if not EXIT:
-                print(f"\n🚨 MAX RETRIES: Session likely expired")
-                print(f"   Next action: Re-login and restart monitoring")
+                log(f"🚨 MAX RETRIES: Session likely expired", "error")
+                log(f"   Next action: Re-login and restart monitoring")
                 send_notification("🚨 <b>Crashed</b>\n\nMax retries exceeded, restarting...")
         except Exception as e:
             # Login failure - wait longer before retrying with fresh browser
-            print(f"Login failed with exception: {e}")
+            log(f"Login failed with exception: {e}", "error")
             send_notification("⚠️ <b>Login Error</b>\n\nException during login, retrying...")
             next_retry = datetime.now() + timedelta(seconds=EXCEPTION_TIME)
-            print(f"\n💥 LOGIN FAILED: {type(e).__name__}")
-            print(f"   Next action: Reinitialize browser and retry login")
-            print(f"   Next retry at: {next_retry.strftime('%H:%M:%S')}")
+            log(f"💥 LOGIN FAILED: {type(e).__name__}", "error")
+            log(f"   Next action: Reinitialize browser and retry login")
+            log(f"   Next retry at: {next_retry.strftime('%H:%M:%S')}")
             time.sleep(EXCEPTION_TIME)
             driver.quit()
             driver = get_driver()  # Reinitialize the driver
