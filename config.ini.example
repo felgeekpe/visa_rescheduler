@@ -13,6 +13,9 @@ RELATIVE_END_DATE_DAYS =
 COUNTRY_CODE = es-co
 ; Bogotá
 FACILITY_ID = 25
+; Dry-run mode: validates the reschedule flow without actually confirming
+; Set to True to test that all form elements work, then set back to False
+DRY_RUN = False
 
 [CHROMEDRIVER]
 ; Details for the script to control Chrome

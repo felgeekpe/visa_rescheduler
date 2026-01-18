@@ -151,6 +151,11 @@ if RELATIVE_END_DATE_DAYS:
 COUNTRY_CODE = config['USVISA']['COUNTRY_CODE']   # Portal locale (e.g., 'es-co' for Colombia)
 FACILITY_ID = config['USVISA']['FACILITY_ID']     # Consulate ID (e.g., 25 for Bogota)
 
+# Dry-run mode: goes through reschedule flow but stops before final confirmation
+DRY_RUN = config['USVISA'].getboolean('DRY_RUN', fallback=False)
+if DRY_RUN:
+    log("⚠️  DRY_RUN mode enabled - will NOT actually reschedule")
+
 # -----------------------------------------------------------------------------
 # Notification Services (all optional)
 # -----------------------------------------------------------------------------
@@ -555,6 +560,16 @@ def reschedule(date: str) -> None:
     # Confirmar
     # Get a tag with text "Confirmar"
     confirm_button = driver.find_element(By.XPATH, '//*[contains(text(), "Confirmar")]')
+
+    if DRY_RUN:
+        # Dry-run mode: validate flow but don't actually confirm
+        log("  🧪 DRY_RUN: Found 'Confirmar' button - would click here")
+        log("  🧪 DRY_RUN: All form elements validated successfully!")
+        msg = f"🧪 <b>Dry-Run Complete</b>\n\nValidated reschedule flow for: <code>{date}</code>\n\n✅ Date input\n✅ Time selection\n✅ Submit button\n✅ Confirm button found\n\n<i>No actual changes made</i>"
+        send_notification(msg)
+        log("  🧪 DRY_RUN: Reschedule validation successful - no changes made")
+        return
+
     confirm_button.click()
     time.sleep(3)
 
