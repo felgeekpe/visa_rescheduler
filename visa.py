@@ -65,6 +65,7 @@ import random
 import platform
 import configparser
 from datetime import datetime
+from typing import Any, Optional, Union
 
 import requests
 from selenium import webdriver
@@ -124,7 +125,7 @@ REGEX_CONTINUE = "//a[contains(text(),'Continuar')]"
 # Return True to accept the date, False to reject it.
 # Example: Only accept dates in November on or after the 5th:
 #   def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
-def MY_CONDITION(month, day): return True  # Accept all dates within range
+def MY_CONDITION(month: int, day: int) -> bool: return True  # Accept all dates within range
 
 # -----------------------------------------------------------------------------
 # Timing Constants (in seconds)
@@ -164,7 +165,7 @@ JS_SCRIPT = ("var req = new XMLHttpRequest();"
 EXIT = False
 
 
-def send_notification(msg):
+def send_notification(msg: str) -> None:
     print(f"Sending notification: {msg}")
 
     if SENDGRID_API_KEY:
@@ -197,7 +198,7 @@ def send_notification(msg):
         requests.post(SLACK_WEBHOOK, data=json.dumps(payload), headers=headers)
 
 
-def get_driver():
+def get_driver() -> Union[webdriver.Chrome, webdriver.Remote]:
     if LOCAL_USE:
         dr = webdriver.Chrome()
     else:
@@ -207,7 +208,7 @@ def get_driver():
 driver = get_driver()
 
 
-def login():
+def login() -> None:
     # Bypass reCAPTCHA
     driver.get(f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv")
     time.sleep(STEP_TIME)
@@ -230,7 +231,7 @@ def login():
     do_login_action()
 
 
-def do_login_action():
+def do_login_action() -> None:
     print("\tinput email")
     user = driver.find_element(By.ID, 'user_email')
     user.send_keys(USERNAME)
@@ -256,14 +257,14 @@ def do_login_action():
     print("\tlogin successful!")
 
 
-def get_date():
+def get_date() -> list[dict[str, Any]]:
     driver.get(APPOINTMENT_URL)
     session = driver.get_cookie("_yatri_session")["value"]
     script = "var req = new XMLHttpRequest();req.open('GET', '" + str(DATE_URL) + "', false);req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');req.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); req.setRequestHeader('Cookie', '_yatri_session=" + session + "'); req.send(null);return req.responseText;"
     NEW_GET = driver.execute_script(script)
     return json.loads(NEW_GET)
 
-def get_time(date):
+def get_time(date: str) -> str:
     time_url = TIME_URL % date
     session = driver.get_cookie("_yatri_session")["value"]
     script = JS_SCRIPT % (str(time_url), session)
@@ -275,7 +276,7 @@ def get_time(date):
     return time
 
 
-def reschedule(date):
+def reschedule(date: str) -> None:
     global EXIT
     print(f"Starting Reschedule ({date})")
     send_notification(f"Starting Reschedule ({date})")
@@ -319,23 +320,23 @@ def reschedule(date):
         send_notification(msg)
 
 
-def is_logged_in():
+def is_logged_in() -> bool:
     content = driver.page_source
     if(content.find("error") != -1):
         return False
     return True
 
 
-def print_dates(dates):
+def print_dates(dates: list[dict[str, Any]]) -> None:
     print("Available dates:")
     for d in dates:
         print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
     print()
 
 
-def get_available_date(dates):
+def get_available_date(dates: list[dict[str, Any]]) -> Optional[str]:
 
-    def is_in_period(date, PSD, PED):
+    def is_in_period(date: str, PSD: datetime, PED: datetime) -> bool:
         new_date = datetime.strptime(date, "%Y-%m-%d")
         result = ( PED > new_date and new_date > PSD )
         return result
@@ -350,7 +351,7 @@ def get_available_date(dates):
     print(f"\n\nNo available dates between ({PSD.date()}) and ({PED.date()})!")
 
 
-def push_notification(dates):
+def push_notification(dates: list[dict[str, Any]]) -> None:
     msg = "date: "
     for d in dates:
         msg = msg + d.get('date') + '; '
