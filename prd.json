@@ -1,0 +1,117 @@
+{
+  "name": "Full Script Documentation",
+  "description": "Add comprehensive documentation to visa.py including module docstring, function docstrings, type hints, and inline comments for complex logic",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Add module-level docstring with overview and usage",
+      "acceptanceCriteria": [
+        "Module docstring at top of visa.py explains the script's purpose",
+        "Docstring includes usage instructions and prerequisites",
+        "Docstring lists required configuration sections",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-002",
+      "title": "Add type hints to all function signatures",
+      "acceptanceCriteria": [
+        "All functions have parameter type hints",
+        "All functions have return type hints",
+        "Types are imported from typing module where needed",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-003",
+      "title": "Add docstrings to notification and driver functions",
+      "acceptanceCriteria": [
+        "send_notification() has docstring explaining parameters and channels",
+        "get_driver() has docstring explaining local vs remote modes",
+        "Docstrings follow Google-style format",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-004",
+      "title": "Add docstrings to login functions",
+      "acceptanceCriteria": [
+        "login() has docstring explaining the login flow",
+        "do_login_action() has docstring explaining form interactions",
+        "Docstrings mention timing delays and their purpose",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-005",
+      "title": "Add docstrings to date retrieval functions",
+      "acceptanceCriteria": [
+        "get_date() has docstring explaining XHR approach and return format",
+        "get_time() has docstring explaining time slot retrieval",
+        "get_available_date() has docstring explaining date filtering logic",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-006",
+      "title": "Add docstrings to reschedule and utility functions",
+      "acceptanceCriteria": [
+        "reschedule() has docstring explaining the booking flow",
+        "is_logged_in() has docstring explaining session validation",
+        "print_dates() and push_notification() have docstrings",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-007",
+      "title": "Add inline comments for complex code sections",
+      "acceptanceCriteria": [
+        "JS_SCRIPT constant has comment explaining XHR bypass approach",
+        "Main loop logic has comments explaining retry and cooldown behavior",
+        "URL constants have comments explaining their purpose",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-008",
+      "title": "Document configuration constants section",
+      "acceptanceCriteria": [
+        "Config loading section has comments grouping related settings",
+        "Timing constants have comments explaining their values",
+        "MY_CONDITION function has comment explaining its purpose",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-009",
+      "title": "Add modern notification system with Telegram and Discord support",
+      "acceptanceCriteria": [
+        "Add Telegram bot notification support with TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID config",
+        "Add Discord webhook notification support with DISCORD_WEBHOOK config",
+        "Update config.ini.example with new notification sections",
+        "Update module docstring to document new notification channels",
+        "Script still runs correctly after changes"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-010",
+      "title": "Add deployment and notification setup instructions to README",
+      "acceptanceCriteria": [
+        "README includes step-by-step Telegram bot setup instructions (create bot, get chat ID)",
+        "README includes Discord webhook creation instructions",
+        "README includes deployment options (local, Docker, cloud VPS)",
+        "Instructions are clear and include relevant links to official documentation"
+      ],
+      "passes": true
+    }
+  ]
+}
