@@ -101,7 +101,10 @@ config.read('config.ini')
 USERNAME = config['USVISA']['USERNAME']           # Login email for usvisa-info.com
 PASSWORD = config['USVISA']['PASSWORD']           # Account password
 SCHEDULE_ID = config['USVISA']['SCHEDULE_ID']     # Appointment ID from URL
-MY_SCHEDULE_DATE_START = config['USVISA']['MY_SCHEDULE_DATE_START']  # Earliest acceptable date
+MY_SCHEDULE_DATE_START = config.get('USVISA', 'MY_SCHEDULE_DATE_START', fallback='').strip()
+if not MY_SCHEDULE_DATE_START:
+    MY_SCHEDULE_DATE_START = datetime.today().strftime("%Y-%m-%d")
+    print(f"No MY_SCHEDULE_DATE_START set, defaulting to today: {MY_SCHEDULE_DATE_START}")
 MY_SCHEDULE_DATE = config['USVISA']['MY_SCHEDULE_DATE']              # Latest acceptable date (deadline)
 
 # Optional: Override MY_SCHEDULE_DATE with a relative date (days from today)
@@ -117,13 +120,13 @@ FACILITY_ID = config['USVISA']['FACILITY_ID']     # Consulate ID (e.g., 25 for B
 # -----------------------------------------------------------------------------
 # Notification Services (all optional)
 # -----------------------------------------------------------------------------
-SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']  # Email notifications via SendGrid
-PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']              # Pushover API token
-PUSH_USER = config['PUSHOVER']['PUSH_USER']                # Pushover user key
-SLACK_WEBHOOK = config['SLACK']['SLACK_WEBHOOK']           # Slack webhook URL
-TELEGRAM_BOT_TOKEN = config['TELEGRAM']['TELEGRAM_BOT_TOKEN']  # Telegram bot token from @BotFather
-TELEGRAM_CHAT_ID = config['TELEGRAM']['TELEGRAM_CHAT_ID']      # Telegram chat/group ID for notifications
-DISCORD_WEBHOOK = config['DISCORD']['DISCORD_WEBHOOK']         # Discord webhook URL for channel notifications
+SENDGRID_API_KEY = config.get('SENDGRID', 'SENDGRID_API_KEY', fallback='')
+PUSH_TOKEN = config.get('PUSHOVER', 'PUSH_TOKEN', fallback='')
+PUSH_USER = config.get('PUSHOVER', 'PUSH_USER', fallback='')
+SLACK_WEBHOOK = config.get('SLACK', 'SLACK_WEBHOOK', fallback='')
+TELEGRAM_BOT_TOKEN = config.get('TELEGRAM', 'TELEGRAM_BOT_TOKEN', fallback='')
+TELEGRAM_CHAT_ID = config.get('TELEGRAM', 'TELEGRAM_CHAT_ID', fallback='')
+DISCORD_WEBHOOK = config.get('DISCORD', 'DISCORD_WEBHOOK', fallback='')
 
 # -----------------------------------------------------------------------------
 # WebDriver Configuration (from [CHROMEDRIVER] section)
@@ -165,18 +168,33 @@ TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_I
 APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment?confirmed_limit_message=1"
 
 # -----------------------------------------------------------------------------
-# JavaScript for XHR Requests
+# JavaScript for Async XHR Requests
 # -----------------------------------------------------------------------------
 # This script is executed in the browser to make authenticated API calls.
-# It bypasses CORS restrictions by running within the page context and
-# uses the session cookie for authentication.
-JS_SCRIPT = ("var req = new XMLHttpRequest();"
-                f"req.open('GET', '%s', false);"
-                "req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');"
-                "req.setRequestHeader('X-Requested-With', 'XMLHttpRequest');"
-                f"req.setRequestHeader('Cookie', '_yatri_session=%s');"
-                "req.send(null);"
-                "return req.responseText;")
+# Uses async XHR instead of sync XHR (which Chrome now blocks).
+# Cookies are sent automatically since we're on the same domain.
+# %s = URL
+JS_SCRIPT = """
+var callback = arguments[arguments.length - 1];
+var req = new XMLHttpRequest();
+req.open('GET', '%s', true);
+req.setRequestHeader('Accept', 'application/json, text/javascript, */*; q=0.01');
+req.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+req.withCredentials = true;
+req.onreadystatechange = function() {
+    if (req.readyState === 4) {
+        if (req.status === 200) {
+            callback(req.responseText);
+        } else {
+            callback(JSON.stringify({error: 'HTTP ' + req.status + ': ' + req.statusText, body: req.responseText}));
+        }
+    }
+};
+req.onerror = function() {
+    callback(JSON.stringify({error: 'XHR network error'}));
+};
+req.send(null);
+"""
 
 # -----------------------------------------------------------------------------
 # Global State
@@ -207,6 +225,7 @@ def send_notification(msg: str) -> None:
 
     # Telegram - fast, reliable, and free
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        print("  -> Sending via Telegram...")
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -214,20 +233,30 @@ def send_notification(msg: str) -> None:
             "parse_mode": "HTML"
         }
         try:
-            requests.post(url, data=data)
+            resp = requests.post(url, data=data)
+            if resp.ok:
+                print("  -> Telegram: OK")
+            else:
+                print(f"  -> Telegram: Failed ({resp.status_code}: {resp.text})")
         except Exception as e:
-            print(f"Telegram notification failed: {e}")
+            print(f"  -> Telegram: Exception - {e}")
 
     # Discord - popular for gaming/tech communities
     if DISCORD_WEBHOOK:
+        print("  -> Sending via Discord...")
         headers = {'Content-type': 'application/json'}
         payload = {'content': msg}
         try:
-            requests.post(DISCORD_WEBHOOK, data=json.dumps(payload), headers=headers)
+            resp = requests.post(DISCORD_WEBHOOK, data=json.dumps(payload), headers=headers)
+            if resp.ok:
+                print("  -> Discord: OK")
+            else:
+                print(f"  -> Discord: Failed ({resp.status_code}: {resp.text})")
         except Exception as e:
-            print(f"Discord notification failed: {e}")
+            print(f"  -> Discord: Exception - {e}")
 
     if SENDGRID_API_KEY:
+        print("  -> Sending via SendGrid...")
         message = Mail(
             from_email=USERNAME,
             to_emails=USERNAME,
@@ -236,25 +265,39 @@ def send_notification(msg: str) -> None:
         try:
             sg = SendGridAPIClient(SENDGRID_API_KEY)
             response = sg.send(message)
-            print(response.status_code)
-            print(response.body)
-            print(response.headers)
+            print(f"  -> SendGrid: OK ({response.status_code})")
         except Exception as e:
-            print(e.message)
+            print(f"  -> SendGrid: Failed - {e}")
 
     if PUSH_TOKEN:
+        print("  -> Sending via Pushover...")
         url = "https://api.pushover.net/1/messages.json"
         data = {
             "token": PUSH_TOKEN,
             "user": PUSH_USER,
             "message": msg
         }
-        requests.post(url, data)
+        try:
+            resp = requests.post(url, data=data)
+            if resp.ok:
+                print("  -> Pushover: OK")
+            else:
+                print(f"  -> Pushover: Failed ({resp.status_code}: {resp.text})")
+        except Exception as e:
+            print(f"  -> Pushover: Exception - {e}")
 
     if SLACK_WEBHOOK:
+        print("  -> Sending via Slack...")
         headers = {'Content-type': 'application/json'}
         payload = {'text': msg}
-        requests.post(SLACK_WEBHOOK, data=json.dumps(payload), headers=headers)
+        try:
+            resp = requests.post(SLACK_WEBHOOK, data=json.dumps(payload), headers=headers)
+            if resp.ok:
+                print("  -> Slack: OK")
+            else:
+                print(f"  -> Slack: Failed ({resp.status_code}: {resp.text})")
+        except Exception as e:
+            print(f"  -> Slack: Exception - {e}")
 
 
 def get_driver() -> Union[webdriver.Chrome, webdriver.Remote]:
@@ -365,31 +408,43 @@ def do_login_action() -> None:
 def get_date() -> list[dict[str, Any]]:
     """Fetch available appointment dates from the visa portal API.
 
-    Uses JavaScript-executed XMLHttpRequest to bypass CORS restrictions and
-    make an authenticated API call within the browser context. The session
-    cookie is extracted from the browser and included in the request headers.
+    Uses Python requests with the session cookie extracted from the browser.
+    This avoids Chrome's restrictions on synchronous XHR.
 
     Returns:
         List of date dictionaries, each containing:
             - 'date': Date string in YYYY-MM-DD format
             - 'business_day': Boolean indicating if it's a business day
-
-    Note:
-        The XHR approach is used instead of Python requests because the API
-        requires the session cookie which is httpOnly and not accessible
-        outside the browser context.
     """
     driver.get(APPOINTMENT_URL)
-    session = driver.get_cookie("_yatri_session")["value"]
-    script = "var req = new XMLHttpRequest();req.open('GET', '" + str(DATE_URL) + "', false);req.setRequestHeader('Accept', 'application/json, text/javascript, /; q=0.01');req.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); req.setRequestHeader('Cookie', '_yatri_session=" + session + "'); req.send(null);return req.responseText;"
-    NEW_GET = driver.execute_script(script)
-    return json.loads(NEW_GET)
+    time.sleep(STEP_TIME)  # Wait for page to load
+
+    # Extract session cookie from browser
+    session_cookie = driver.get_cookie("_yatri_session")["value"]
+
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "User-Agent": driver.execute_script("return navigator.userAgent;"),
+    }
+    cookies = {"_yatri_session": session_cookie}
+
+    response = requests.get(DATE_URL, headers=headers, cookies=cookies)
+    print(f"API response ({response.status_code}): {response.text[:200] if len(response.text) > 200 else response.text}")
+
+    if response.status_code != 200:
+        raise Exception(f"API error: HTTP {response.status_code}")
+
+    data = response.json()
+    if isinstance(data, dict) and 'error' in data:
+        raise Exception(f"API error: {data['error']}")
+    return data
 
 def get_time(date: str) -> str:
     """Fetch available time slots for a specific appointment date.
 
     Queries the visa portal API for available appointment times on the
-    given date. Uses the same XHR approach as get_date() for authentication.
+    given date. Uses Python requests with the session cookie from the browser.
 
     Args:
         date: The appointment date in YYYY-MM-DD format.
@@ -399,10 +454,19 @@ def get_time(date: str) -> str:
         Returns the last slot as it's typically less contested.
     """
     time_url = TIME_URL % date
-    session = driver.get_cookie("_yatri_session")["value"]
-    script = JS_SCRIPT % (str(time_url), session)
-    content = driver.execute_script(script)
-    data = json.loads(content)
+
+    # Extract session cookie from browser
+    session_cookie = driver.get_cookie("_yatri_session")["value"]
+
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "User-Agent": driver.execute_script("return navigator.userAgent;"),
+    }
+    cookies = {"_yatri_session": session_cookie}
+
+    response = requests.get(time_url, headers=headers, cookies=cookies)
+    data = response.json()
     print(f"Got time successfully! {data}")
     time = data.get("available_times")[-1]
     print(f"Got time successfully! {date} {time}")
@@ -587,10 +651,14 @@ if __name__ == "__main__":
                         # Normal polling interval between availability checks
                         time.sleep(RETRY_TIME)
 
-                except:
+                except Exception as e:
                     # Increment retry counter and continue - may be transient error
                     retry_count += 1
-                    send_notification("⚠️ <b>Error</b>\n\nException occurred, retrying...")
+                    import traceback
+                    error_details = traceback.format_exc()
+                    print(f"Exception in main loop: {e}")
+                    print(error_details)
+                    send_notification(f"⚠️ <b>Error</b>\n\n{type(e).__name__}: {e}")
                     time.sleep(RETRY_TIME)
             # Exhausted all retries without success - likely session expired
             if not EXIT:
